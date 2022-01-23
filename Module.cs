@@ -10,7 +10,7 @@ namespace ExampleMod
     public class Module : ETGModule
     {
         public static readonly string MOD_NAME = "PERFECT CLONE";
-        public static readonly string VERSION = "0.0";
+        public static readonly string VERSION = "0.1";
         public static readonly string TEXT_COLOR = "#00FFFF";
 
         public override void Start()

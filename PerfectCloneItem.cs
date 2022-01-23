@@ -4,6 +4,7 @@ using System.Linq;
 using System.Text;
 using UnityEngine;
 using ItemAPI;
+using System.Collections;
 
 namespace ExampleMod
 {
@@ -84,11 +85,31 @@ namespace ExampleMod
 				this.m_owner.currentMineCart.EvacuateSpecificPlayer(this.m_owner, true);
 			}
 
-			HandlePerfectCloneEffect(this.m_owner);
+			HandlePerfectCloneItem(this.m_owner);
 			
 		}
 
-        private void HandlePerfectCloneEffect(PlayerController player)
+		private void HandlePerfectCloneItem(PlayerController player)
+        {
+			if (GameManager.Instance.CurrentGameType == GameManager.GameType.COOP_2_PLAYER)
+			{
+				PlayerController otherPlayer = GameManager.Instance.GetOtherPlayer(player);
+				if (otherPlayer.IsGhost)
+				{
+					base.StartCoroutine(HandlePerfectCloneEffect(player));
+				}
+				else
+				{
+					player.m_cloneWaitingForCoopDeath = true;
+				}
+			}
+			else
+			{
+				base.StartCoroutine(HandlePerfectCloneEffect(player));
+			}
+		}
+
+        private IEnumerator HandlePerfectCloneEffect(PlayerController player)
         {
 			Pixelator.Instance.FadeToBlack(0.5f, false, 0f);
 			GameUIRoot.Instance.ToggleUICamera(false);
@@ -106,6 +127,7 @@ namespace ExampleMod
 			while (ela < 0.5f)
 			{
 				ela += GameManager.INVARIANT_DELTA_TIME;
+				yield return null;
 			}
 			int targetLevelIndex = 1;
 			if (GameManager.Instance.CurrentGameMode == GameManager.GameMode.SHORTCUT)
@@ -121,6 +143,55 @@ namespace ExampleMod
 			{
 				GameManager.Instance.DelayedLoadNextLevel(0.5f);
 			}
+			player.m_cloneWaitingForCoopDeath = false;
+			ExtraLifeItem cloneItem = null;
+			for (int i = 0; i < player.passiveItems.Count; i++)
+			{
+				if (player.passiveItems[i] is ExtraLifeItem)
+				{
+					ExtraLifeItem extraLifeItem = player.passiveItems[i] as ExtraLifeItem;
+					if (extraLifeItem.extraLifeMode == ExtraLifeItem.ExtraLifeMode.CLONE)
+					{
+						cloneItem = extraLifeItem;
+					}
+				}
+			}
+			/*if (cloneItem != null) // it's all copy pasting except for this part. this is literally the only thing that makes perfect clone different from normal clone
+			{
+				player.RemovePassiveItem(cloneItem.PickupObjectId);
+			}*/
+			if (GameManager.Instance.CurrentGameType == GameManager.GameType.COOP_2_PLAYER)
+			{
+				for (int j = 0; j < GameManager.Instance.AllPlayers.Length; j++)
+				{
+					PlayerController playerController = GameManager.Instance.AllPlayers[j];
+					if (playerController.IsGhost)
+					{
+						playerController.StartCoroutine(playerController.CoopResurrectInternal(playerController.transform.position, null, true));
+					}
+					playerController.healthHaver.FullHeal();
+					playerController.specRigidbody.Velocity = Vector2.zero;
+					playerController.knockbackDoer.TriggerTemporaryKnockbackInvulnerability(1f);
+					if (playerController.m_returnTeleporter != null)
+					{
+						playerController.m_returnTeleporter.ClearReturnActive();
+						playerController.m_returnTeleporter = null;
+					}
+				}
+				Chest.ToggleCoopChests(false);
+			}
+			else
+			{
+				player.healthHaver.FullHeal();
+				player.specRigidbody.Velocity = Vector2.zero;
+				player.knockbackDoer.TriggerTemporaryKnockbackInvulnerability(1f);
+				if (player.m_returnTeleporter != null)
+				{
+					player.m_returnTeleporter.ClearReturnActive();
+					player.m_returnTeleporter = null;
+				}
+			}
+			yield return new WaitForSeconds(1f);
 			player.IsOnFire = false;
 			player.CurrentFireMeterValue = 0f;
 			player.CurrentPoisonMeterValue = 0f;
@@ -129,8 +200,9 @@ namespace ExampleMod
 			player.healthHaver.FullHeal();
 			if (player.characterIdentity == PlayableCharacters.Robot)
 			{
-				this.healthHaver.Armor = 6f;
+				player.healthHaver.Armor = 6f;
 			}
+			yield break;
 		}
 	}
 }
